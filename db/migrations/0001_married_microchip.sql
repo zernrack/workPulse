@@ -1,1 +1,0 @@
-ALTER TABLE "tasks" ADD COLUMN "isComplete" boolean DEFAULT false NOT NULL;

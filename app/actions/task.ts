@@ -8,6 +8,7 @@ import { eq } from "drizzle-orm";
 
 const taskSchema = z.object({
   taskId: z.string().uuid().readonly(),
+  userId: z.string().uuid(),
   task_name: z.string().min(2),
   description: z.string().min(10),
   createdAt: z.string().datetime(),
@@ -22,18 +23,21 @@ const editTaskSchema = z.object({
 
 export const createTask = actionClient
   .inputSchema(taskSchema)
-  .action(async ({ parsedInput: { task_name, description, createdAt } }) => {
-    try {
-      await db.insert(tasks).values({
-        task_name,
-        description,
-        createdAt: new Date(createdAt),
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new Error(message);
+  .action(
+    async ({ parsedInput: { task_name, description, createdAt, userId } }) => {
+      try {
+        await db.insert(tasks).values({
+          userId,
+          task_name,
+          description,
+          createdAt: new Date(createdAt),
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(message);
+      }
     }
-  });
+  );
 
 export const getAllTasks = actionClient.action(async () => {
   await db.select().from(tasks);
