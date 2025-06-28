@@ -99,7 +99,7 @@ export const loginAction = actionClient
     console.log("[LOGIN] Login successful for:", parsedInput.email);
 
     revalidatePath("/", "layout");
-    redirect("/");
+    redirect("/home");
   });
 
 /**
@@ -162,7 +162,7 @@ export const signupAction = actionClient
     console.log("[SIGNUP] Supabase Auth signup successful for:", signUpData.user.email);
 
     revalidatePath("/", "layout");
-    redirect("/");
+    redirect("/home");
   });
 
 export async function logout() {

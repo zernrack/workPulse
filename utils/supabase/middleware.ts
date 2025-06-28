@@ -33,6 +33,16 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  console.log("[MIDDLEWARE] Path:", request.nextUrl.pathname, "User:", !!user);
+
+  // Always redirect from root path to /home (both authenticated and unauthenticated users)
+  if (request.nextUrl.pathname === '/') {
+    console.log("[MIDDLEWARE] Redirecting from / to /home");
+    const url = request.nextUrl.clone();
+    url.pathname = '/home';
+    return NextResponse.redirect(url);
+  }
+
   // Prevent authenticated users from accessing /login or /register
   if (
     user &&
@@ -40,15 +50,16 @@ export async function updateSession(request: NextRequest) {
       request.nextUrl.pathname === '/register')
   ) {
     const url = request.nextUrl.clone();
-    url.pathname = '/';
+    url.pathname = '/home';
     return NextResponse.redirect(url);
   }
 
-  // Prevent unauthenticated users from accessing protected routes
+  // Prevent unauthenticated users from accessing protected routes (except /home which will redirect to /login)
   if (
     !user &&
     request.nextUrl.pathname !== '/login' &&
     request.nextUrl.pathname !== '/register' &&
+    request.nextUrl.pathname !== '/home' &&
     !request.nextUrl.pathname.startsWith('/auth')
   ) {
     const url = request.nextUrl.clone();
