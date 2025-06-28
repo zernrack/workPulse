@@ -19,7 +19,6 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { signupAction } from "@/app/actions/auth";
 import { Eye, EyeOff, Mail, Lock, User, UserCheck, Zap } from "lucide-react";
-import { FaHeart } from "react-icons/fa";
 
 export function RegisterForm() {
   const [formData, setFormData] = useState({
@@ -271,8 +270,7 @@ export function RegisterForm() {
 
         <div className="text-center mt-8">
           <p className="text-xs text-blue-100 inline-flex items-center gap-2">
-            © 2024 Work Pulse. Made with  
-            <FaHeart className="size-5" fill="red" />
+            2024 Work Pulse. Made with ❤️
           </p>
         </div>
       </div>

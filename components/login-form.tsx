@@ -19,7 +19,6 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { loginAction } from "@/app/actions/auth";
 import { Eye, EyeOff, Mail, Lock, Zap } from "lucide-react";
-import { FaHeart } from "react-icons/fa";
 
 export function LoginForm({
   className,
@@ -173,8 +172,7 @@ export function LoginForm({
         </Card>
         <div className="text-center mt-8">
           <p className="text-xs text-blue-100 inline-flex gap-2 items-center">
-            © 2024 Work Pulse. Made with 
-            <FaHeart className="size-5" fill="red" />
+            2024 Work Pulse. Made with ❤️
           </p>
         </div>
       </div>
