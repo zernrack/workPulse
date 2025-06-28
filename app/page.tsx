@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { logout } from "@/app/actions/auth";
 
 export default function Home() {
   return (
@@ -50,6 +51,14 @@ export default function Home() {
             Read our docs
           </a>
         </div>
+        <form action={logout}>
+          <button
+            type="submit"
+            className="rounded-full border border-solid border-red-500 text-red-500 px-4 py-2 mt-6 hover:bg-red-50"
+          >
+            Logout
+          </button>
+        </form>
       </main>
       <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
         <a

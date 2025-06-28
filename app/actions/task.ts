@@ -7,14 +7,15 @@ import { tasks } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
 const taskSchema = z.object({
-  id: z.number().readonly(),
+  taskId: z.string().uuid().readonly(),
+  userId: z.string().uuid(),
   task_name: z.string().min(2),
   description: z.string().min(10),
   createdAt: z.string().datetime(),
 });
 
 const editTaskSchema = z.object({
-  id: z.number(),
+  taskId: z.string().uuid(),
   task_name: z.string().min(2).optional(),
   description: z.string().min(10).optional(),
   updatedAt: z.string().datetime(),
@@ -22,18 +23,21 @@ const editTaskSchema = z.object({
 
 export const createTask = actionClient
   .inputSchema(taskSchema)
-  .action(async ({ parsedInput: { task_name, description, createdAt } }) => {
-    try {
-      await db.insert(tasks).values({
-        task_name,
-        description,
-        createdAt: new Date(createdAt),
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new Error(message);
+  .action(
+    async ({ parsedInput: { task_name, description, createdAt, userId } }) => {
+      try {
+        await db.insert(tasks).values({
+          userId,
+          task_name,
+          description,
+          createdAt: new Date(createdAt),
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(message);
+      }
     }
-  });
+  );
 
 export const getAllTasks = actionClient.action(async () => {
   await db.select().from(tasks);
@@ -42,7 +46,7 @@ export const getAllTasks = actionClient.action(async () => {
 export const editTask = actionClient
   .inputSchema(editTaskSchema)
   .action(
-    async ({ parsedInput: { id, task_name, description, updatedAt } }) => {
+    async ({ parsedInput: { taskId, task_name, description, updatedAt } }) => {
       try {
         await db
           .update(tasks)
@@ -51,7 +55,7 @@ export const editTask = actionClient
             description,
             updatedAt: new Date(updatedAt),
           })
-          .where(eq(tasks.id, id));
+          .where(eq(tasks.id, taskId));
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         throw new Error(message);
@@ -62,12 +66,12 @@ export const editTask = actionClient
 export const deleteTask = actionClient
   .inputSchema(
     object({
-      id: z.string(),
+      taskId: z.string().uuid(),
     })
   )
-  .action(async ({ parsedInput: { id } }) => {
+  .action(async ({ parsedInput: { taskId } }) => {
     try {
-      await db.delete(tasks).where(eq(tasks.id, Number(id)));
+      await db.delete(tasks).where(eq(tasks.id, taskId));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       throw new Error(message);
