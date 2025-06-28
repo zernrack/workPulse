@@ -32,6 +32,9 @@ const registerSchema = authSchema
     path: ["confirmPassword"], // This will attach the error to confirmPassword field
   });
 
+
+
+  // TODO: MAKE A FILE FOR ERROR HANDLING AND ADD IT TO MIDDLEWARE
 /**
  * Handles user login using Supabase authentication.
  *
