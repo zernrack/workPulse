@@ -35,9 +35,9 @@ export async function updateSession(request: NextRequest) {
 
   console.log("[MIDDLEWARE] Path:", request.nextUrl.pathname, "User:", !!user);
 
-  // Always redirect from root path to /home (both authenticated and unauthenticated users)
-  if (request.nextUrl.pathname === '/') {
-    console.log("[MIDDLEWARE] Redirecting from / to /home");
+  // Redirect authenticated users from root path to /home
+  if (request.nextUrl.pathname === '/' && user) {
+    console.log("[MIDDLEWARE] Redirecting authenticated user from / to /home");
     const url = request.nextUrl.clone();
     url.pathname = '/home';
     return NextResponse.redirect(url);
@@ -54,7 +54,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Prevent unauthenticated users from accessing protected routes (except /home which will redirect to /login)
+  // Prevent unauthenticated users from accessing protected routes
   if (
     !user &&
     request.nextUrl.pathname !== '/login' &&
