@@ -39,6 +39,7 @@ import {
 } from "@/app/actions/task";
 import { logout } from "@/app/actions/auth";
 import { useUserProfile } from "@/hooks/useUserProfile";
+import { timeInAction, timeOutAction } from "@/app/actions/time-records";
 
 // Database task type
 interface DbTask {
@@ -56,6 +57,7 @@ export default function Home() {
   const [isClockedIn, setIsClockedIn] = useState(false);
   const [clockInTime, setClockInTime] = useState<Date | null>(null);
   const [totalTimeToday, setTotalTimeToday] = useState(0); // in minutes
+  const [clockActionLoading, setClockActionLoading] = useState(false);
 
   // User state - now using custom hook
   const { user, isLoading: userLoading } = useUserProfile();
@@ -65,10 +67,39 @@ export default function Home() {
   const [newTaskText, setNewTaskText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  // Load tasks on component mount
+  // Load user profile, tasks, and clock status on component mount
   useEffect(() => {
     loadTasks();
+    checkClockStatus();
   }, []);
+
+  const checkClockStatus = async () => {
+    try {
+      const response = await fetch('/api/time-records/status');
+      
+      if (response.ok) {
+        const data = await response.json();
+        
+        if (data.isActive && data.checkIn) {
+          setIsClockedIn(true);
+          setClockInTime(new Date(data.checkIn.clockIn));
+          
+          // Calculate time elapsed since clock in
+          const now = new Date();
+          const clockInTime = new Date(data.checkIn.clockIn);
+          const diffInMs = now.getTime() - clockInTime.getTime();
+          const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
+          setTotalTimeToday(diffInMinutes);
+        } else {
+          setIsClockedIn(false);
+          setClockInTime(null);
+          setTotalTimeToday(0);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to check clock status:", error);
+    }
+  };
 
   const loadTasks = async () => {
     try {
@@ -98,29 +129,60 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [isClockedIn, clockInTime]);
 
-  // Clock in/out functions
-  const handleClockIn = () => {
-    const now = new Date();
-    setIsClockedIn(true);
-    setClockInTime(now);
-    setTotalTimeToday(0);
-    toast.success("Clocked in! Have a productive day! 🚀");
+  // Clock in/out functions - now using database actions
+  const handleClockIn = async () => {
+    setClockActionLoading(true);
+    try {
+      const result = await timeInAction();
+      
+      if (result?.serverError) {
+        toast.error(result.serverError);
+      } else if (result?.data?.success) {
+        const now = new Date();
+        setIsClockedIn(true);
+        setClockInTime(now);
+        setTotalTimeToday(0);
+        toast.success("Clocked in! Have a productive day! 🚀");
+      }
+    } catch (error) {
+      toast.error("Failed to clock in");
+      console.error("Clock in error:", error);
+    } finally {
+      setClockActionLoading(false);
+    }
   };
 
-  const handleClockOut = () => {
-    if (clockInTime) {
-      const now = new Date();
-      const diffInMs = now.getTime() - clockInTime.getTime();
-      const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
-      const hours = Math.floor(diffInMinutes / 60);
-      const minutes = diffInMinutes % 60;
-      toast.success(
-        `Clocked out! You worked for ${hours}h ${minutes}m today. Great job! 👏`
-      );
+  const handleClockOut = async () => {
+    setClockActionLoading(true);
+    try {
+      const result = await timeOutAction();
+      
+      if (result?.serverError) {
+        toast.error(result.serverError);
+      } else if (result?.data?.success) {
+        if (clockInTime) {
+          const now = new Date();
+          const diffInMs = now.getTime() - clockInTime.getTime();
+          const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
+          const hours = Math.floor(diffInMinutes / 60);
+          const minutes = diffInMinutes % 60;
+          toast.success(
+            `Clocked out! You worked for ${hours}h ${minutes}m today. Great job! 👏`
+          );
+        } else {
+          toast.success("Clocked out successfully!");
+        }
+        
+        setIsClockedIn(false);
+        setClockInTime(null);
+        setTotalTimeToday(0);
+      }
+    } catch (error) {
+      toast.error("Failed to clock out");
+      console.error("Clock out error:", error);
+    } finally {
+      setClockActionLoading(false);
     }
-    setIsClockedIn(false);
-    setClockInTime(null);
-    setTotalTimeToday(0);
   };
 
   // Task functions - now using database actions
@@ -235,19 +297,21 @@ export default function Home() {
               {!isClockedIn ? (
                 <Button
                   onClick={handleClockIn}
+                  disabled={clockActionLoading}
                   className="bg-green-600 hover:bg-green-700 text-white"
                 >
                   <LogIn className="mr-2 h-4 w-4" />
-                  Clock In
+                  {clockActionLoading ? "Clocking In..." : "Clock In"}
                 </Button>
               ) : (
                 <Button
                   onClick={handleClockOut}
+                  disabled={clockActionLoading}
                   variant="outline"
                   className="border-red-200 text-red-600 hover:bg-red-50 bg-transparent"
                 >
                   <ClockOut className="mr-2 h-4 w-4" />
-                  Clock Out
+                  {clockActionLoading ? "Clocking Out..." : "Clock Out"}
                 </Button>
               )}
 
@@ -449,7 +513,7 @@ export default function Home() {
           {/* Todo Section */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-xl">Tasks</CardTitle>
+              <CardTitle className="text-xl">Things to do</CardTitle>
             </CardHeader>
             <CardContent>
               {/* Add Task Input */}
@@ -458,7 +522,7 @@ export default function Home() {
                   placeholder="Add a new task..."
                   value={newTaskText}
                   onChange={(e) => setNewTaskText(e.target.value)}
-                  onKeyPress={handleKeyPress}
+                  onKeyDown={handleKeyPress}
                   className="flex-1"
                 />
                 <Button

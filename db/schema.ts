@@ -6,7 +6,6 @@ import {
   timestamp,
   uuid,
   pgEnum,
-  pgSchema,
 } from "drizzle-orm/pg-core";
 
 import { relations } from "drizzle-orm";
@@ -18,11 +17,6 @@ export const userRoleEnum = pgEnum("user_role", [
   "superadmin",
 ]);
 
-const authSchema = pgSchema("auth");
-
-export const users = authSchema.table("users", {
-  id: uuid("id").primaryKey(),
-});
 
 export const tasks = pgTable("tasks", {
   id: uuid("taskId").primaryKey().defaultRandom(),
@@ -31,11 +25,11 @@ export const tasks = pgTable("tasks", {
   description: text("description"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow(),
-  isComplete: boolean().default(false).notNull(),
+  isComplete: boolean("is_complete").default(false).notNull(),
 }).enableRLS();
 
 export const accounts = pgTable("profiles", {
-  id: uuid("user_id").primaryKey().references(() => users.id).notNull(),
+  id: uuid("user_id").primaryKey(),
   firstName: varchar("first_name", { length: 50 }).notNull(),
   lastName: varchar("last_name", { length: 50 }).notNull(),
   userName: varchar("user_name", { length: 50 }).notNull().unique(),
@@ -46,9 +40,21 @@ export const accounts = pgTable("profiles", {
   isActive: boolean("is_active").default(true).notNull(),
 }).enableRLS();
 
+export const checkIns = pgTable("check_ins", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => accounts.id).notNull(),
+  clockIn: timestamp("clock_in").notNull(),
+  clockOut: timestamp("clock_out"),
+  date: timestamp("date_today").defaultNow().notNull(),
+}).enableRLS();
+
+
+/* Relationship Queries  */
+
 /* ---------- one‑to‑many helpers ---------- */
 export const usersRelations = relations(accounts, ({ many }) => ({
   tasks: many(tasks),
+  // checkIns: many(checkIns),
 }));
 
 export const tasksRelations = relations(tasks, ({ one }) => ({
@@ -57,3 +63,11 @@ export const tasksRelations = relations(tasks, ({ one }) => ({
     references:  [accounts.id],
   }),
 }));
+
+export const checkInsRelations = relations(checkIns, ({ one }) => ({
+  user: one(accounts, {
+    fields:      [checkIns.userId],
+    references:  [accounts.id],
+  }),
+}));
+
