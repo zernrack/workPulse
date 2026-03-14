@@ -11,13 +11,14 @@ import { eq, and, isNull, desc, gte, lt } from "drizzle-orm";
 // Helper function to get current user
 async function getCurrentUser() {
   const supabase = await createClient();
-  const { data: { user }, error } = await supabase.auth.getUser();
+    const { data, error } = await supabase.auth.getClaims();
+    const userId = data?.claims?.sub;
   
-  if (error || !user) {
+    if (error || !userId) {
     throw new Error("You must be logged in to perform this action");
   }
   
-  return user;
+    return { id: userId };
 }
 
 export const timeInAction = actionClient
