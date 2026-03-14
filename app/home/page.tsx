@@ -2,7 +2,7 @@
 
 import type React from "react";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -31,26 +31,16 @@ import {
   Calendar,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useAction } from "next-safe-action/hooks";
 import {
   createTaskAction,
-  getAllTasksAction,
   deleteTaskAction,
   toggleTaskAction,
 } from "@/app/actions/task";
 import { logout } from "@/app/actions/auth";
-import { useUserProfile } from "@/hooks/useUserProfile";
 import { timeInAction, timeOutAction } from "@/app/actions/time-records";
-
-// Database task type
-interface DbTask {
-  id: string;
-  userId: string;
-  task_name: string;
-  description: string | null;
-  createdAt: Date;
-  updatedAt: Date | null;
-  isComplete: boolean;
-}
+import { getDashboardBootstrapAction } from "@/app/actions/dashboard";
+import type { DbTask, UserProfile } from "@/types/interfaces";
 
 export default function Home() {
   // Clock in/out state
@@ -59,35 +49,45 @@ export default function Home() {
   const [totalTimeToday, setTotalTimeToday] = useState(0); // in minutes
   const [clockActionLoading, setClockActionLoading] = useState(false);
 
-  // User state - now using custom hook
-  const { user, isLoading: userLoading } = useUserProfile();
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [userLoading, setUserLoading] = useState(true);
 
   // Tasks state - now using database tasks
   const [tasks, setTasks] = useState<DbTask[]>([]);
   const [newTaskText, setNewTaskText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  // Load user profile, tasks, and clock status on component mount
-  useEffect(() => {
-    loadTasks();
-    checkClockStatus();
-  }, []);
+  const { executeAsync: bootstrapDashboard } = useAction(
+    getDashboardBootstrapAction,
+  );
+  const { executeAsync: createTask } = useAction(createTaskAction);
+  const { executeAsync: toggleTaskState } = useAction(toggleTaskAction);
+  const { executeAsync: removeTask } = useAction(deleteTaskAction);
+  const { executeAsync: timeIn } = useAction(timeInAction);
+  const { executeAsync: timeOut } = useAction(timeOutAction);
 
-  const checkClockStatus = async () => {
+  const loadDashboardBootstrap = useCallback(async () => {
     try {
-      const response = await fetch('/api/time-records/status');
-      
-      if (response.ok) {
-        const data = await response.json();
-        
-        if (data.isActive && data.checkIn) {
+      setUserLoading(true);
+      const result = await bootstrapDashboard();
+
+      if (result?.serverError) {
+        toast.error(result.serverError);
+        return;
+      }
+
+      if (result?.data?.success) {
+        const data = result.data;
+        setUser(data.user);
+        setTasks(data.tasks);
+
+        if (data.activeCheckIn) {
           setIsClockedIn(true);
-          setClockInTime(new Date(data.checkIn.clockIn));
-          
-          // Calculate time elapsed since clock in
+          const currentClockIn = new Date(data.activeCheckIn.clockIn);
+          setClockInTime(currentClockIn);
+
           const now = new Date();
-          const clockInTime = new Date(data.checkIn.clockIn);
-          const diffInMs = now.getTime() - clockInTime.getTime();
+          const diffInMs = now.getTime() - currentClockIn.getTime();
           const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
           setTotalTimeToday(diffInMinutes);
         } else {
@@ -97,23 +97,17 @@ export default function Home() {
         }
       }
     } catch (error) {
-      console.error("Failed to check clock status:", error);
+      toast.error("Failed to load dashboard");
+      console.error("Load dashboard error:", error);
+    } finally {
+      setUserLoading(false);
     }
-  };
+  }, [bootstrapDashboard]);
 
-  const loadTasks = async () => {
-    try {
-      const result = await getAllTasksAction();
-      if (result?.serverError) {
-        toast.error(result.serverError);
-      } else if (result?.data?.success) {
-        setTasks(result.data.tasks);
-      }
-    } catch (error) {
-      toast.error("Failed to load tasks");
-      console.error("Load tasks error:", error);
-    }
-  };
+  // Load all dashboard data in one server action call on mount
+  useEffect(() => {
+    loadDashboardBootstrap();
+  }, [loadDashboardBootstrap]);
 
   // Update total time when clocked in
   useEffect(() => {
@@ -133,8 +127,8 @@ export default function Home() {
   const handleClockIn = async () => {
     setClockActionLoading(true);
     try {
-      const result = await timeInAction();
-      
+      const result = await timeIn();
+
       if (result?.serverError) {
         toast.error(result.serverError);
       } else if (result?.data?.success) {
@@ -155,8 +149,8 @@ export default function Home() {
   const handleClockOut = async () => {
     setClockActionLoading(true);
     try {
-      const result = await timeOutAction();
-      
+      const result = await timeOut();
+
       if (result?.serverError) {
         toast.error(result.serverError);
       } else if (result?.data?.success) {
@@ -167,12 +161,12 @@ export default function Home() {
           const hours = Math.floor(diffInMinutes / 60);
           const minutes = diffInMinutes % 60;
           toast.success(
-            `Clocked out! You worked for ${hours}h ${minutes}m today. Great job! 👏`
+            `Clocked out! You worked for ${hours}h ${minutes}m today. Great job! 👏`,
           );
         } else {
           toast.success("Clocked out successfully!");
         }
-        
+
         setIsClockedIn(false);
         setClockInTime(null);
         setTotalTimeToday(0);
@@ -191,7 +185,7 @@ export default function Home() {
 
     setIsLoading(true);
     try {
-      const result = await createTaskAction({
+      const result = await createTask({
         task_name: newTaskText.trim(),
         description: "",
       });
@@ -199,7 +193,9 @@ export default function Home() {
       if (result?.serverError) {
         toast.error(result.serverError);
       } else if (result?.data?.success) {
-        await loadTasks(); // Reload tasks to get the latest data
+        if (result.data.task) {
+          setTasks((prev) => [...prev, result.data!.task]);
+        }
         setNewTaskText("");
         toast.success("Task added!");
       }
@@ -213,16 +209,24 @@ export default function Home() {
 
   const toggleTask = async (taskId: string) => {
     try {
-      const result = await toggleTaskAction({ taskId });
+      const result = await toggleTaskState({ taskId });
 
       if (result?.serverError) {
         toast.error(result.serverError);
       } else if (result?.data?.success) {
-        await loadTasks(); // Reload tasks to get the latest data
+        if (result.data.task) {
+          setTasks((prev) =>
+            prev.map((task) =>
+              task.id === taskId ? { ...task, ...result.data?.task } : task,
+            ),
+          );
+        }
         const task = tasks.find((t) => t.id === taskId);
         if (task) {
           toast.success(
-            task.isComplete ? "Task marked as incomplete" : "Task completed! 🎉"
+            task.isComplete
+              ? "Task marked as incomplete"
+              : "Task completed! 🎉",
           );
         }
       }
@@ -234,12 +238,12 @@ export default function Home() {
 
   const deleteTask = async (taskId: string) => {
     try {
-      const result = await deleteTaskAction({ taskId });
+      const result = await removeTask({ taskId });
 
       if (result?.serverError) {
         toast.error(result.serverError);
       } else if (result?.data?.success) {
-        await loadTasks(); // Reload tasks to get the latest data
+        setTasks((prev) => prev.filter((task) => task.id !== taskId));
         toast.success("Task deleted!");
       }
     } catch (error) {
@@ -397,7 +401,7 @@ export default function Home() {
             <p className="text-gray-600 text-lg">
               {isClockedIn
                 ? `You've been productive for ${formatTime(
-                    totalTimeToday
+                    totalTimeToday,
                   )} today!`
                 : "Ready to start your productive day? Clock in to begin!"}
             </p>
@@ -473,7 +477,7 @@ export default function Home() {
                     <p className="text-2xl font-bold text-gray-900 mt-1">
                       {tasks.length > 0
                         ? Math.round(
-                            (completedTasks.length / tasks.length) * 100
+                            (completedTasks.length / tasks.length) * 100,
                           )
                         : 0}
                       %
