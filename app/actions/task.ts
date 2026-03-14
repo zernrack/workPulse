@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { actionClient } from "@/lib/safe-actions";
 import { db } from "@/lib/db";
-import { tasks } from "@/db/schema";
+import { tasks } from "@/db/schemas";
 import { eq, and } from "drizzle-orm";
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";

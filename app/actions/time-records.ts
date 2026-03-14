@@ -2,7 +2,7 @@
 
 import { actionClient } from "@/lib/safe-actions";
 import { db } from "@/lib/db";
-import { checkIns } from "@/db/schema";
+import { checkIns } from "@/db/schemas";
 import { createClient } from "@/utils/supabase/server";
 import { log } from "console";
 import { eq, and, isNull, desc, gte, lt } from "drizzle-orm";
