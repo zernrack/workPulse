@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { actionClient } from "@/lib/safe-actions";
 import { db } from "@/lib/db";
-import { tasks } from "@/db/schema";
+import { tasks } from "@/db/schemas";
 import { eq, and } from "drizzle-orm";
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
@@ -30,13 +30,14 @@ const toggleTaskSchema = z.object({
 // Helper function to get current user
 async function getCurrentUser() {
   const supabase = await createClient();
-  const { data: { user }, error } = await supabase.auth.getUser();
+  const { data, error } = await supabase.auth.getClaims();
+  const userId = data?.claims?.sub;
   
-  if (error || !user) {
+  if (error || !userId) {
     throw new Error("You must be logged in to perform this action");
   }
   
-  return user;
+  return { id: userId };
 }
 
 export const createTaskAction = actionClient

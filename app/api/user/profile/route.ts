@@ -1,15 +1,16 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { accounts } from "@/db/schema";
+import { accounts } from "@/db/schemas";
 import { eq } from "drizzle-orm";
 import { createClient } from "@/utils/supabase/server";
 
 export async function GET() {
   try {
     const supabase = await createClient();
-    const { data: { user }, error } = await supabase.auth.getUser();
+    const { data, error } = await supabase.auth.getClaims();
+    const userId = data?.claims?.sub;
     
-    if (error || !user) {
+    if (error || !userId) {
       return NextResponse.json(
         { error: "You must be logged in to access this resource" }, 
         { status: 401 }
@@ -20,7 +21,7 @@ export async function GET() {
     const [userProfile] = await db
       .select()
       .from(accounts)
-      .where(eq(accounts.id, user.id));
+      .where(eq(accounts.id, userId));
 
     if (!userProfile) {
       return NextResponse.json(

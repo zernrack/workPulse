@@ -1,15 +1,16 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { checkIns } from "@/db/schema";
+import { checkIns } from "@/db/schemas";
 import { eq, and, isNull, desc } from "drizzle-orm";
 import { createClient } from "@/utils/supabase/server";
 
 export async function GET() {
   try {
     const supabase = await createClient();
-    const { data: { user }, error } = await supabase.auth.getUser();
+    const { data, error } = await supabase.auth.getClaims();
+    const userId = data?.claims?.sub;
     
-    if (error || !user) {
+    if (error || !userId) {
       return NextResponse.json(
         { error: "You must be logged in to access this resource" }, 
         { status: 401 }
@@ -20,7 +21,7 @@ export async function GET() {
     const [activeCheckIn] = await db
       .select()
       .from(checkIns)
-      .where(and(eq(checkIns.userId, user.id), isNull(checkIns.clockOut)))
+      .where(and(eq(checkIns.userId, userId), isNull(checkIns.clockOut)))
       .orderBy(desc(checkIns.clockIn))
       .limit(1);
 

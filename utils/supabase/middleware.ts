@@ -13,7 +13,7 @@ export async function updateSession(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value));
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
           supabaseResponse = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
@@ -24,19 +24,18 @@ export async function updateSession(request: NextRequest) {
   );
 
   // Do not run code between createServerClient and
-  // supabase.auth.getUser(). A simple mistake could make it very hard to debug
+  // supabase.auth.getClaims(). A simple mistake could make it very hard to debug
   // issues with users being randomly logged out.
 
-  // IMPORTANT: DO NOT REMOVE auth.getUser()
+  // IMPORTANT: DO NOT REMOVE auth.getClaims()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data } = await supabase.auth.getClaims();
+  const userId = data?.claims?.sub;
 
-  console.log("[MIDDLEWARE] Path:", request.nextUrl.pathname, "User:", !!user);
+  console.log("[MIDDLEWARE] Path:", request.nextUrl.pathname, "User:", !!userId);
 
   // Redirect authenticated users from root path to /home
-  if (request.nextUrl.pathname === '/' && user) {
+  if (request.nextUrl.pathname === '/' && userId) {
     console.log("[MIDDLEWARE] Redirecting authenticated user from / to /home");
     const url = request.nextUrl.clone();
     url.pathname = '/home';
@@ -45,7 +44,7 @@ export async function updateSession(request: NextRequest) {
 
   // Prevent authenticated users from accessing /login or /register
   if (
-    user &&
+    userId &&
     (request.nextUrl.pathname === '/login' ||
       request.nextUrl.pathname === '/register')
   ) {
@@ -56,7 +55,7 @@ export async function updateSession(request: NextRequest) {
 
   // Prevent unauthenticated users from accessing protected routes
   if (
-    !user &&
+    !userId &&
     request.nextUrl.pathname !== '/login' &&
     request.nextUrl.pathname !== '/register' &&
     request.nextUrl.pathname !== '/' &&

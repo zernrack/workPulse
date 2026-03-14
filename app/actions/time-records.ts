@@ -2,7 +2,7 @@
 
 import { actionClient } from "@/lib/safe-actions";
 import { db } from "@/lib/db";
-import { checkIns } from "@/db/schema";
+import { checkIns } from "@/db/schemas";
 import { createClient } from "@/utils/supabase/server";
 import { log } from "console";
 import { eq, and, isNull, desc, gte, lt } from "drizzle-orm";
@@ -11,13 +11,14 @@ import { eq, and, isNull, desc, gte, lt } from "drizzle-orm";
 // Helper function to get current user
 async function getCurrentUser() {
   const supabase = await createClient();
-  const { data: { user }, error } = await supabase.auth.getUser();
+    const { data, error } = await supabase.auth.getClaims();
+    const userId = data?.claims?.sub;
   
-  if (error || !user) {
+    if (error || !userId) {
     throw new Error("You must be logged in to perform this action");
   }
   
-  return user;
+    return { id: userId };
 }
 
 export const timeInAction = actionClient
