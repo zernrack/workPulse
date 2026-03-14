@@ -5,7 +5,46 @@ import { redirect } from "next/navigation";
 
 import { createClient } from "@/utils/supabase/server";
 import { actionClient } from "@/lib/safe-actions";
+import { db } from "@/lib/db";
+import { accounts } from "@/db/schemas";
+import { eq, or } from "drizzle-orm";
 import { z } from "zod";
+
+async function ensureProfileExists(input: {
+  id: string;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  userName?: string;
+}) {
+  const [existingProfile] = await db
+    .select({ id: accounts.id })
+    .from(accounts)
+    .where(eq(accounts.id, input.id))
+    .limit(1);
+
+  if (existingProfile) {
+    return;
+  }
+
+  const fallbackUserName = input.email.split("@")[0]?.trim();
+  const firstName = input.firstName?.trim();
+  const lastName = input.lastName?.trim();
+  const userName = input.userName?.trim() || fallbackUserName;
+
+  if (!firstName || !lastName || !userName) {
+    throw new Error("Your account is missing profile information. Please contact support.");
+  }
+
+  await db.insert(accounts).values({
+    id: input.id,
+    firstName,
+    lastName,
+    userName,
+    email: input.email,
+    updatedAt: new Date(),
+  });
+}
 
 const authSchema = z.object({
   email: z.string().email(),
@@ -56,11 +95,12 @@ export const loginAction = actionClient
   .inputSchema(authSchema)
   .action(async ({ parsedInput }) => {
     const supabase = await createClient();
+    const email = parsedInput.email.trim().toLowerCase();
 
-    console.log("[LOGIN] Attempting login for:", parsedInput.email);
+    console.log("[LOGIN] Attempting login for:", email);
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email: parsedInput.email,
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
       password: parsedInput.password,
     });
 
@@ -96,7 +136,19 @@ export const loginAction = actionClient
       }
     }
 
-    console.log("[LOGIN] Login successful for:", parsedInput.email);
+    if (!data.user) {
+      throw new Error("Login failed. Please try again or contact support if the problem persists.");
+    }
+
+    await ensureProfileExists({
+      id: data.user.id,
+      email: data.user.email?.toLowerCase() || email,
+      firstName: data.user.user_metadata?.first_name,
+      lastName: data.user.user_metadata?.last_name,
+      userName: data.user.user_metadata?.user_name,
+    });
+
+    console.log("[LOGIN] Login successful for:", email);
 
     revalidatePath("/", "layout");
     redirect("/home");
@@ -118,26 +170,47 @@ export const signupAction = actionClient
   .inputSchema(registerSchema)
   .action(async ({ parsedInput }) => {
     const supabase = await createClient();
+    const email = parsedInput.email.trim().toLowerCase();
+    const firstName = parsedInput.firstName.trim();
+    const lastName = parsedInput.lastName.trim();
+    const userName = parsedInput.userName.trim();
 
-    console.log("[SIGNUP] Received signup data for:", parsedInput.email);
+    console.log("[SIGNUP] Received signup data for:", email);
+
+    // Prevent auth user creation when profile-level uniques already exist.
+    const [existingProfile] = await db
+      .select({ id: accounts.id, email: accounts.email, userName: accounts.userName })
+      .from(accounts)
+      .where(or(eq(accounts.email, email), eq(accounts.userName, userName)))
+      .limit(1);
+
+    if (existingProfile) {
+      if (existingProfile.email === email) {
+        throw new Error("An account with this email already exists");
+      }
+
+      if (existingProfile.userName === userName) {
+        throw new Error("This username is already taken");
+      }
+    }
 
     // Create the auth user - Supabase will handle duplicates detection
     const { data: signUpData, error: authError } = await supabase.auth.signUp({
-      email: parsedInput.email,
+      email,
       password: parsedInput.password,
       options: {
         data: {
-          first_name: parsedInput.firstName,
-          last_name: parsedInput.lastName,
-          user_name: parsedInput.userName,
+          first_name: firstName,
+          last_name: lastName,
+          user_name: userName,
         },
       },
     });
 
     console.log("[SIGNUP] Supabase Auth user metadata:", {
-      first_name: parsedInput.firstName,
-      last_name: parsedInput.lastName,
-      user_name: parsedInput.userName,
+      first_name: firstName,
+      last_name: lastName,
+      user_name: userName,
     });
 
     if (authError) {
@@ -159,10 +232,23 @@ export const signupAction = actionClient
       throw new Error("Failed to create user account");
     }
 
+    // Create app profile row expected by dashboard/task/time-record features.
+    await ensureProfileExists({
+      id: signUpData.user.id,
+      firstName,
+      lastName,
+      userName,
+      email,
+    });
+
     console.log("[SIGNUP] Supabase Auth signup successful for:", signUpData.user.email);
 
     revalidatePath("/", "layout");
-    redirect("/home");
+    if (signUpData.session) {
+      redirect("/home");
+    }
+
+    redirect("/login");
   });
 
 export async function logout() {
