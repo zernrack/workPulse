@@ -7,8 +7,31 @@ import { createClient } from "@/utils/supabase/server";
 import { actionClient } from "@/lib/safe-actions";
 import { db } from "@/lib/db";
 import { accounts } from "@/db/schemas";
-import { eq, or } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
+
+function mapProfileWriteError(error: unknown): Error {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: string }).code === "23505"
+  ) {
+    const constraint = "constraint" in error ? (error as { constraint?: string }).constraint : undefined;
+
+    if (constraint === "profiles_user_name_unique") {
+      return new Error("This username is already taken");
+    }
+
+    if (constraint === "profiles_email_unique") {
+      return new Error("An account with this email already exists");
+    }
+  }
+
+  return error instanceof Error
+    ? error
+    : new Error("There was an issue saving your profile. Please try again.");
+}
 
 async function ensureProfileExists(input: {
   id: string;
@@ -36,14 +59,18 @@ async function ensureProfileExists(input: {
     throw new Error("Your account is missing profile information. Please contact support.");
   }
 
-  await db.insert(accounts).values({
-    id: input.id,
-    firstName,
-    lastName,
-    userName,
-    email: input.email,
-    updatedAt: new Date(),
-  });
+  try {
+    await db.insert(accounts).values({
+      id: input.id,
+      firstName,
+      lastName,
+      userName,
+      email: input.email,
+      updatedAt: new Date(),
+    });
+  } catch (error) {
+    throw mapProfileWriteError(error);
+  }
 }
 
 const authSchema = z.object({
@@ -176,23 +203,6 @@ export const signupAction = actionClient
     const userName = parsedInput.userName.trim();
 
     console.log("[SIGNUP] Received signup data for:", email);
-
-    // Prevent auth user creation when profile-level uniques already exist.
-    const [existingProfile] = await db
-      .select({ id: accounts.id, email: accounts.email, userName: accounts.userName })
-      .from(accounts)
-      .where(or(eq(accounts.email, email), eq(accounts.userName, userName)))
-      .limit(1);
-
-    if (existingProfile) {
-      if (existingProfile.email === email) {
-        throw new Error("An account with this email already exists");
-      }
-
-      if (existingProfile.userName === userName) {
-        throw new Error("This username is already taken");
-      }
-    }
 
     // Create the auth user - Supabase will handle duplicates detection
     const { data: signUpData, error: authError } = await supabase.auth.signUp({
