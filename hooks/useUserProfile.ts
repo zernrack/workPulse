@@ -2,17 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-
-interface UserProfile {
-  id: string;
-  firstName: string;
-  lastName: string;
-  userName: string;
-  email: string;
-  role: string | null;
-  createdAt: Date;
-  isActive: boolean;
-}
+import type { UserProfile } from "@/types/interfaces";
 
 export function useUserProfile() {
   const [user, setUser] = useState<UserProfile | null>(null);
